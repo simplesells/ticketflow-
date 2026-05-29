@@ -25,7 +25,7 @@ export default function WorkOrderList() {
 
   useEffect(() => {
     setLoading(true);
-    fetchWorkOrders(filter || undefined)
+    fetchWorkOrders(filter ? { status: filter } : undefined)
       .then(setOrders)
       .catch(console.error)
       .finally(() => setLoading(false));
