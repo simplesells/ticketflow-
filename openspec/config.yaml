@@ -1,20 +1,32 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Tech stack: TypeScript, React 18, Express 5, SQLite (better-sqlite3), Vite
+  Frontend: React 18 + Vite + react-router-dom (port 5176)
+  Backend: Express 5 + tsx (port 5678)
+  Database: SQLite via better-sqlite3, single file ticketflow.db
+  Domain: 企业工单流转系统 (TicketFlow)，三员模型（提交者/调度者/完成者）
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Explore 阶段检查清单:
+  1. 画主流程（正常路径）
+  2. 画异常路径（出问题了怎么退——至少两条退回路径：完成者→调度者、调度者→提交者）
+  3. 每个状态问：谁操作、谁确认、附带什么数据
+  4. 逐个角色穷举所有可能的操作
+  5. 退回操作必须有必填原因字段（returnReason）
+  6. 终态前必须有确认步骤（已解决 → 提交者确认 → 已关闭）
+
+  工作台角色:
+  - 提交者: 创建工单、确认关闭、不满意退回、撤回、重开
+  - 调度者: 分派、退回给提交者、拒绝关闭、重新分派
+  - 完成者: 处理完成、退回调度者、转交他人
+
+  变更切割原则:
+  - 按业务能力切，不按技术层切
+  - 每个变更对应一个用户可独立验证的操作
+  - 每步 tasks 控制在 3-7 条
+
+rules:
+  proposal:
+    - Keep proposals concise, focus on WHY not HOW
+  tasks:
+    - Break into chunks of 3-7 tasks per change

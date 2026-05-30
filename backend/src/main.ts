@@ -11,7 +11,7 @@ seed();
 app.use('/api/workorders', workorderRoutes);
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-const PORT = parseInt(process.env.PORT || '5678', 10);
+const PORT = parseInt(process.env.PORT || '5680', 10);
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
 
 export { app };

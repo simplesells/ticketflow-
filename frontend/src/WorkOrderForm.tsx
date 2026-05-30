@@ -6,9 +6,9 @@ import type { WorkOrderType, WorkOrderPriority } from './types';
 const TYPE_OPTIONS: WorkOrderType[] = ['咨询', '报修', '建议', '投诉'];
 const PRIORITY_OPTIONS: WorkOrderPriority[] = ['低', '中', '高', '紧急'];
 
-export default function WorkOrderForm() {
+export default function WorkOrderForm({ onBack }: { onBack: () => void }) {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ title: '', description: '', type: '咨询' as WorkOrderType, priority: '中' as WorkOrderPriority });
+  const [form, setForm] = useState({ title: '', description: '', type: '咨询' as WorkOrderType, priority: '中' as WorkOrderPriority, submitter: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -76,6 +76,15 @@ export default function WorkOrderForm() {
             </select>
           </div>
         </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>提交人</label>
+          <input
+            value={form.submitter}
+            onChange={e => setForm({ ...form, submitter: e.target.value })}
+            style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }}
+            placeholder="请输入您的姓名（选填，默认匿名）"
+          />
+        </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button
             type="submit"
@@ -86,7 +95,7 @@ export default function WorkOrderForm() {
           </button>
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={onBack}
             style={{ padding: '10px 24px', background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer' }}
           >
             取消
