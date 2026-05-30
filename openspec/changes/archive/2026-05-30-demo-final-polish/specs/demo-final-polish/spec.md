@@ -1,0 +1,6 @@
+- [x] task-001: POST /workorders 新增 type/priority 枚举校验
+- [x] task-002: 新增 PATCH /workorders/:id/edit 路由
+- [x] task-003: ResolverView 移除待处理Tab
+- [x] task-004: WorkOrderList 新增已撤回Tab + 退回高亮
+- [x] task-005: WorkOrderDetail 新增编辑模式(退回待提交/待处理时)
+- [x] task-006: 详情页重提按钮文案改为"重提工单"
