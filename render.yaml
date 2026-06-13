@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: ticketflow
+    runtime: node
+    buildCommand: cd frontend && npm install && npm run build && cd ../backend && npm install && npm run build
+    startCommand: cd backend && node dist/main.js
+    envVars:
+      - key: TURSO_URL
+        value: libsql://ticketflow-simplesells.aws-ap-northeast-1.turso.io
+      - key: TURSO_TOKEN
+        value: eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODEzMjA0NTYsImlkIjoiMDE5ZWJlZjgtNGIwMS03ZjU1LWIyNzItZjYwZWE0MmI2ZWUzIiwicmlkIjoiNmYyYzg4ZTItYjAzNC00OTU2LWFiMjAtMDA4MGE5OTI1ZDAxIn0.9FR5l9MvhAfhPw5UH0OweqZYFPC_6DI4WpKl0XBhFgbMHEVc5Xj5GyV3oM4l9rItMViYjjqgBKkzJdmZZILMDA
