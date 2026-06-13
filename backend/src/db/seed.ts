@@ -1,8 +1,9 @@
 import db, { generateCode } from './database';
 
-export function seed() {
-  const count = db.prepare('SELECT COUNT(*) as c FROM workorders').get() as { c: number };
-  if (count.c > 0) return;
+export async function seed() {
+  const r = await db.execute('SELECT COUNT(*) as c FROM workorders');
+  const count = r.rows[0]?.c as number;
+  if (count > 0) return;
 
   const now = new Date().toISOString();
   const items: any[] = [
@@ -16,12 +17,11 @@ export function seed() {
     { title: '新员工入职设备申请', description: '下周入职3名新员工，需要配备笔记本和显示器', type: '咨询', priority: '中', status: '待处理', assignee: '' },
   ];
 
-  const insert = db.prepare(`
-    INSERT INTO workorders (code, title, description, type, priority, status, assignee, history, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, '[]', ?, ?)
-  `);
-
   for (const item of items) {
-    insert.run(generateCode(), item.title, item.description, item.type, item.priority, item.status, item.assignee, now, now);
+    const code = await generateCode();
+    await db.execute({
+      sql: 'INSERT INTO workorders (code, title, description, type, priority, status, assignee, history, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, \'[]\', ?, ?)',
+      args: [code, item.title, item.description, item.type, item.priority, item.status, item.assignee, now, now],
+    });
   }
 }

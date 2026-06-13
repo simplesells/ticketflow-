@@ -1,6 +1,5 @@
-import './db/database';
+import { initDB, seedTemplates } from './db/database';
 import { seed } from './db/seed';
-import { seedTemplates } from './db/database';
 import workorderRoutes from './routes/workorders';
 import authRoutes from './routes/auth';
 import commentRoutes from './routes/comments';
@@ -14,8 +13,6 @@ import fs from 'fs';
 const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
-seed();
-seedTemplates();
 app.use('/api/workorders', workorderRoutes);
 app.use('/api/workorders', commentRoutes);
 app.use('/api/auth', authRoutes);
@@ -27,20 +24,29 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 const frontendDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
 if (fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
-  // SPA fallback：非 API 路径返回 index.html（Express 5 不支持 app.get('*')）
   app.use((_req, res) => {
     if (!_req.path.startsWith('/api')) {
       res.sendFile(path.join(frontendDist, 'index.html'));
     }
   });
-  console.log('Frontend static files served from', frontendDist);
 }
 
-const PORT = parseInt(process.env.PORT || '5680', 10);
+async function start() {
+  await initDB();
+  await seed();
+  await seedTemplates();
 
-// 仅在直接运行时启动服务器，测试导入时不启动（避免并行测试端口冲突）
+  if (frontendDist.length) console.log('Frontend static files served from', frontendDist);
+
+  const PORT = parseInt(process.env.PORT || '5680', 10);
+  if (!process.env.VITEST) {
+    app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+  }
+}
+
+// 非测试环境直接启动
 if (!process.env.VITEST) {
-  app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+  start();
 }
 
-export { app };
+export { app, initDB };

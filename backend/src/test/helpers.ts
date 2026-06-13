@@ -1,14 +1,14 @@
-import request from 'supertest';
-import { app } from '../main';
+import { app, initDB } from '../main';
 import db from '../db/database';
 
-// 清除所有工单数据（每次测试前重置）
-export function clearData() {
-  db.exec('DELETE FROM workorders');
+// 初始化数据库（测试前调用）
+export async function setupDB() {
+  await initDB();
 }
 
-// 创建测试用的 express app（避免多测试共享状态）
-export function getTestApp() {
-  // supertest 需要 app 导出
-  return request(app);
+// 清除所有数据
+export async function clearData() {
+  await db.execute('DELETE FROM notifications');
+  await db.execute('DELETE FROM comments');
+  await db.execute('DELETE FROM workorders');
 }
