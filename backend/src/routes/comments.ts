@@ -8,15 +8,17 @@ const router = Router();
 
 // GET /api/workorders/:id/comments
 router.get('/:id/comments', requireRole(['submitter', 'dispatcher', 'resolver']), async (req, res: Response) => {
-  const r = await db.execute({ sql: 'SELECT id FROM workorders WHERE id = ?', args: [req.params.id] });
+  const wid = String(req.params.id);
+  const r = await db.execute('SELECT id FROM workorders WHERE id = ?', [wid]);
   if (!r.rows[0]) { res.status(404).json({ error: '工单不存在' }); return; }
-  const rows = await db.execute({ sql: 'SELECT * FROM comments WHERE workorder_id = ? ORDER BY created_at ASC', args: [req.params.id] });
+  const rows = await db.execute('SELECT * FROM comments WHERE workorder_id = ? ORDER BY created_at ASC', [wid]);
   res.json(rows.rows.map(rowToComment));
 });
 
 // POST /api/workorders/:id/comments
 router.post('/:id/comments', requireRole(['submitter', 'dispatcher', 'resolver']), async (req: AuthRequest, res: Response) => {
-  const r = await db.execute({ sql: 'SELECT id FROM workorders WHERE id = ?', args: [req.params.id] });
+  const wid = String(req.params.id);
+  const r = await db.execute('SELECT id FROM workorders WHERE id = ?', [wid]);
   if (!r.rows[0]) { res.status(404).json({ error: '工单不存在' }); return; }
 
   const { content } = req.body;
@@ -25,15 +27,15 @@ router.post('/:id/comments', requireRole(['submitter', 'dispatcher', 'resolver']
 
   const author = req.user?.displayName || '匿名';
   const now = new Date().toISOString();
-  const result = await db.execute({
-    sql: 'INSERT INTO comments (workorder_id, content, author, created_at) VALUES (?, ?, ?, ?)',
-    args: [req.params.id, String(content).trim(), author, now],
-  });
-  const row = (await db.execute({ sql: 'SELECT * FROM comments WHERE id = ?', args: [Number(result.lastInsertRowid)] })).rows[0];
+  const result = await db.execute(
+    'INSERT INTO comments (workorder_id, content, author, created_at) VALUES (?, ?, ?, ?)',
+    [wid, String(content).trim(), author, now],
+  );
+  const row = (await db.execute('SELECT * FROM comments WHERE id = ?', [Number(result.lastInsertRowid)])).rows[0];
 
   // 通知工单相关人员
   const currentUserId = req.user!.id;
-  const woR = await db.execute({ sql: 'SELECT submitter, assignee, code FROM workorders WHERE id = ?', args: [req.params.id] });
+  const woR = await db.execute('SELECT submitter, assignee, code FROM workorders WHERE id = ?', [wid]);
   const woRow = woR.rows[0] as any;
   if (woRow) {
     const recipients = new Set<number>();
@@ -43,7 +45,7 @@ router.post('/:id/comments', requireRole(['submitter', 'dispatcher', 'resolver']
     if (asn && asn.id !== currentUserId) recipients.add(asn.id);
     const msg = `${author} 评论了工单 ${woRow.code}`;
     for (const uid of recipients) {
-      await createNotification({ userId: uid, workorderId: Number(req.params.id), type: 'comment', message: msg });
+      await createNotification({ userId: uid, workorderId: Number(wid), type: 'comment', message: msg });
     }
   }
 

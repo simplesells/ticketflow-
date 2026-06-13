@@ -19,9 +19,9 @@ export async function seed() {
 
   for (const item of items) {
     const code = await generateCode();
-    await db.execute({
-      sql: 'INSERT INTO workorders (code, title, description, type, priority, status, assignee, history, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, \'[]\', ?, ?)',
-      args: [code, item.title, item.description, item.type, item.priority, item.status, item.assignee, now, now],
-    });
+    await db.execute(
+      'INSERT INTO workorders (code, title, description, type, priority, status, assignee, history, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, \'[]\', ?, ?)',
+      [code, item.title, item.description, item.type, item.priority, item.status, item.assignee, now, now],
+    );
   }
 }
