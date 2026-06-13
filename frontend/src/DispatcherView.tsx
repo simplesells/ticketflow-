@@ -1,26 +1,32 @@
 import { useEffect, useState } from 'react';
-import { fetchWorkOrders, assignWorkOrder, updateWorkOrderStatus } from './api';
+import { Link } from 'react-router-dom';
+import { fetchWorkOrders, assignWorkOrder, updateWorkOrderStatus, fetchResolvers } from './api';
+import { useAuth } from './AuthContext';
+import NotificationBell from './NotificationBell';
 import type { WorkOrder, WorkOrderStatus } from './types';
-
-const RESOLVERS = ['张工', '李工', '王工'];
 
 const TABS = [
   { key: 'pending' as const, label: '待分派', color: '#d97706', filter: (w: WorkOrder) => !w.assignee || w.status === '退回待分派' },
-  { key: 'progress' as const, label: '处理中', color: '#3b82f6', filter: (w: WorkOrder) => w.status === '处理中' },
+  { key: 'progress' as const, label: '处理中', color: '#3b82f6', filter: (w: WorkOrder) => w.status === '处理中' || w.status === '退回处理' },
   { key: 'confirm' as const, label: '等待确认', color: '#10b981', filter: (w: WorkOrder) => w.status === '已解决' },
   { key: 'returned' as const, label: '退回提交', color: '#ef4444', filter: (w: WorkOrder) => w.status === '退回待提交' },
   { key: 'done' as const, label: '已完成', color: '#6b7280', filter: (w: WorkOrder) => w.status === '已关闭' || w.status === '已撤回' },
 ];
 
 export default function DispatcherView() {
+  const { logout } = useAuth();
   const [orders, setOrders] = useState<WorkOrder[]>([]);
+  const [resolvers, setResolvers] = useState<{ id: number; displayName: string; role: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('pending');
   const [acting, setActing] = useState<Record<string, boolean>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [selections, setSelections] = useState<Record<string, string>>({});
 
-  useEffect(() => { fetchWorkOrders().then(setOrders).finally(() => setLoading(false)); }, []);
+  useEffect(() => {
+    fetchWorkOrders().then(setOrders).finally(() => setLoading(false));
+    fetchResolvers().then(setResolvers).catch(() => {});
+  }, []);
 
   const doAssign = async (id: number) => {
     const assignee = selections[`assign-${id}`];
@@ -60,8 +66,14 @@ export default function DispatcherView() {
 
   return (
     <div style={{ padding: 24 }}>
-      <h2>调度者工作台</h2>
-      <p style={{ color: '#6b7280', marginBottom: 12 }}>快速分派和处理工单</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>调度者工作台</h2>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <NotificationBell />
+          <button onClick={logout} style={{ padding: '4px 12px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 13 }}>退出登录</button>
+        </div>
+      </div>
+      <p style={{ color: '#6b7280', marginBottom: 12 }}>快速分派和处理工单 &middot; <Link to="/templates" style={{ color: '#2563eb' }}>管理模板</Link></p>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {TABS.map(t => {
@@ -110,7 +122,7 @@ export default function DispatcherView() {
                       onChange={e => setSelections(p => ({ ...p, [`assign-${wo.id}`]: e.target.value }))}
                       style={{ padding: '4px 6px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 12, width: 80 }}>
                       <option value="" disabled>选择</option>
-                      {RESOLVERS.map(r => <option key={r} value={r}>{r}</option>)}
+                      {resolvers.map(r => <option key={r.id} value={r.displayName}>{r.displayName}</option>)}
                     </select>
                   </td>
                   <td style={{ padding: 8 }}>

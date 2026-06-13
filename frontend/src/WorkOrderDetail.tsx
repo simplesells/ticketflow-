@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { fetchWorkOrder, updateWorkOrderStatus, editWorkOrder } from './api';
+import { fetchWorkOrder, updateWorkOrderStatus, editWorkOrder, fetchComments, createComment } from './api';
+import type { Comment } from './api';
+import { useAuth } from './AuthContext';
+import NotificationBell from './NotificationBell';
 import type { WorkOrder, WorkOrderStatus } from './types';
 
 const NEXT_STATUS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
@@ -37,12 +40,38 @@ export default function WorkOrderDetail() {
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
+
+  // 评论状态
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
 
   const load = () => {
     fetchWorkOrder(Number(id)).then(setWo).catch(console.error).finally(() => setLoading(false));
   };
 
-  useEffect(load, [id]);
+  const loadComments = () => {
+    setCommentsLoading(true);
+    fetchComments(Number(id))
+      .then(setComments)
+      .catch(console.error)
+      .finally(() => setCommentsLoading(false));
+  };
+
+  useEffect(() => { load(); loadComments(); }, [id]);
+
+  const handleCommentSubmit = async () => {
+    if (!newComment.trim()) return;
+    setCommentSubmitting(true);
+    try {
+      await createComment(Number(id), newComment.trim());
+      setNewComment('');
+      loadComments();
+    } catch (e: any) { alert(e.message); }
+    finally { setCommentSubmitting(false); }
+  };
 
   const handleAction = async (newStatus: WorkOrderStatus) => {
     if (!wo) return;
@@ -84,7 +113,10 @@ export default function WorkOrderDetail() {
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: 24 }}>
-      <Link to="/" style={{ color: '#2563eb', textDecoration: 'none', fontSize: 14 }}>&larr; 返回列表</Link>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Link to="/" style={{ color: '#2563eb', textDecoration: 'none', fontSize: 14 }}>&larr; 返回列表</Link>
+        <NotificationBell />
+      </div>
 
       <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1 }}>
@@ -105,7 +137,7 @@ export default function WorkOrderDetail() {
         </span>
       </div>
 
-      {canEdit && !editing && (
+      {canEdit && !editing && user?.role === 'submitter' && (
         <button onClick={startEdit} style={{ marginTop: 16, padding: '6px 16px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}>
           编辑工单内容
         </button>
@@ -145,7 +177,7 @@ export default function WorkOrderDetail() {
         </div>
       )}
 
-      {nextStatuses.length > 0 && (
+      {nextStatuses.length > 0 && user?.role === 'submitter' && (
         <div style={{ marginTop: 24, padding: 16, background: '#f9fafb', borderRadius: 8 }}>
           <h3 style={{ margin: '0 0 8px' }}>提交者操作</h3>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -191,6 +223,52 @@ export default function WorkOrderDetail() {
           </div>
         </div>
       )}
+
+      {/* 评论区 */}
+      <div style={{ marginTop: 32, borderTop: '1px solid #e5e7eb', paddingTop: 24 }}>
+        <h3>评论</h3>
+
+        {commentsLoading ? (
+          <p style={{ color: '#9ca3af' }}>加载中...</p>
+        ) : comments.length === 0 ? (
+          <p style={{ color: '#9ca3af' }}>暂无评论</p>
+        ) : (
+          <div style={{ marginBottom: 20 }}>
+            {comments.map((c) => (
+              <div key={c.id} style={{ padding: '10px 0', borderBottom: '1px solid #f3f4f6' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 500, fontSize: 14 }}>{c.author}</span>
+                  <span style={{ color: '#9ca3af', fontSize: 12 }}>{new Date(c.createdAt).toLocaleString('zh-CN')}</span>
+                </div>
+                <p style={{ margin: 0, color: '#374151', lineHeight: 1.5, whiteSpace: 'pre-wrap', fontSize: 14 }}>{c.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <textarea
+            value={newComment}
+            onChange={e => setNewComment(e.target.value)}
+            placeholder="输入评论..."
+            rows={3}
+            maxLength={2000}
+            style={{ flex: 1, padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, resize: 'vertical' }}
+          />
+          <button
+            onClick={handleCommentSubmit}
+            disabled={commentSubmitting || !newComment.trim()}
+            style={{
+              padding: '8px 20px', background: commentSubmitting || !newComment.trim() ? '#9ca3af' : '#2563eb',
+              color: '#fff', border: 'none', borderRadius: 6, cursor: commentSubmitting || !newComment.trim() ? 'default' : 'pointer',
+              fontWeight: 500, whiteSpace: 'nowrap',
+            }}
+          >
+            {commentSubmitting ? '...' : '发表评论'}
+          </button>
+        </div>
+        <div style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>{newComment.length}/2000</div>
+      </div>
     </div>
   );
 }

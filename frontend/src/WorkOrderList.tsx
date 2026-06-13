@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchWorkOrders } from './api';
+import { useAuth } from './AuthContext';
+import NotificationBell from './NotificationBell';
 import type { WorkOrder, WorkOrderStatus } from './types';
 
 const STATUS_TABS: { label: string; value: WorkOrderStatus | '' }[] = [
@@ -21,6 +23,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 export default function WorkOrderList() {
+  const { logout } = useAuth();
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [filter, setFilter] = useState('');
   const [loading, setLoading] = useState(true);
@@ -37,9 +40,13 @@ export default function WorkOrderList() {
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>工单列表</h1>
-        <Link to="/new" style={{ padding: '8px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', textDecoration: 'none' }}>
-          + 新建工单
-        </Link>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <NotificationBell />
+          <button onClick={logout} style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 13 }}>退出登录</button>
+          <Link to="/new" style={{ padding: '8px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', textDecoration: 'none' }}>
+            + 新建工单
+          </Link>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>

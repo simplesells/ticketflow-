@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { fetchWorkOrders, updateWorkOrderStatus } from './api';
+import { useEffect, useState } from 'react';
+import { fetchWorkOrders, updateWorkOrderStatus, fetchResolvers } from './api';
+import { useAuth } from './AuthContext';
+import NotificationBell from './NotificationBell';
 import type { WorkOrder, WorkOrderStatus } from './types';
 
-const RESOLVERS = ['张工', '李工', '王工'];
 
 const NEXT_STATUS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
   '待处理': [], '处理中': ['已解决', '退回待分派'], '已解决': [], '已关闭': [],
@@ -19,13 +20,22 @@ const TABS = [
 ];
 
 export default function ResolverView() {
+  const { user, logout } = useAuth();
   const [orders, setOrders] = useState<WorkOrder[]>([]);
+  const [resolvers, setResolvers] = useState<{ id: number; displayName: string; role: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [resolver, setResolver] = useState(RESOLVERS[0]);
+  const [resolver, setResolver] = useState(user?.displayName || '');
   const [tab, setTab] = useState('progress');
   const [acting, setActing] = useState<Record<number, boolean>>({});
   const [reasons, setReasons] = useState<Record<number, string>>({});
   const [selectedStatus, setSelectedStatus] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    fetchResolvers().then(data => {
+      setResolvers(data);
+      setResolver(prev => prev || data[0]?.displayName || '');
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -53,17 +63,23 @@ export default function ResolverView() {
 
   return (
     <div style={{ padding: 24 }}>
-      <h2>完成者工作台</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>完成者工作台</h2>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <NotificationBell />
+          <button onClick={logout} style={{ padding: '4px 12px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', cursor: 'pointer', fontSize: 13 }}>退出登录</button>
+        </div>
+      </div>
       <p style={{ color: '#6b7280', marginBottom: 12 }}>选择处理人，查看和处理工单</p>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        {RESOLVERS.map(r => (
-          <button key={r} onClick={() => setResolver(r)} style={{
+        {resolvers.map(r => (
+          <button key={r.id} onClick={() => setResolver(r.displayName)} style={{
             padding: '6px 20px', borderRadius: 20,
-            border: resolver === r ? '2px solid #2563eb' : '1px solid #d1d5db',
-            background: resolver === r ? '#dbeafe' : '#fff',
-            cursor: 'pointer', fontWeight: resolver === r ? 600 : 400,
-          }}>{r}</button>
+            border: resolver === r.displayName ? '2px solid #2563eb' : '1px solid #d1d5db',
+            background: resolver === r.displayName ? '#dbeafe' : '#fff',
+            cursor: 'pointer', fontWeight: resolver === r.displayName ? 600 : 400,
+          }}>{r.displayName}</button>
         ))}
       </div>
 

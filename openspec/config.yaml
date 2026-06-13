@@ -3,7 +3,7 @@ schema: spec-driven
 context: |
   Tech stack: TypeScript, React 18, Express 5, SQLite (better-sqlite3), Vite
   Frontend: React 18 + Vite + react-router-dom (port 5176)
-  Backend: Express 5 + tsx (port 5678)
+  Backend: Express 5 + tsx (port 5680)
   Database: SQLite via better-sqlite3, single file ticketflow.db
   Domain: 企业工单流转系统 (TicketFlow)，三员模型（提交者/调度者/完成者）
 
@@ -15,18 +15,75 @@ context: |
   5. 退回操作必须有必填原因字段（returnReason）
   6. 终态前必须有确认步骤（已解决 → 提交者确认 → 已关闭）
 
-  工作台角色:
-  - 提交者: 创建工单、确认关闭、不满意退回、撤回、重开
-  - 调度者: 分派、退回给提交者、拒绝关闭、重新分派
-  - 完成者: 处理完成、退回调度者、转交他人
-
   变更切割原则:
-  - 按业务能力切，不按技术层切
+  - 按业务能力切，不按技术层切（一个 Change = 一个垂直切片）
   - 每个变更对应一个用户可独立验证的操作
   - 每步 tasks 控制在 3-7 条
+  - Propose → Explore → 写测试（红）→ Apply（绿）→ Archive
 
+# ============================================================
+# 全局规则（跨 Change 通用，并行开发的共同语言）
+# ============================================================
 rules:
+  # --- 角色与关系 ---
+  roles:
+    提交者:
+      id: submitter
+      desc: 提交工单的人
+      actions: [创建工单, 确认关闭, 退回重做, 撤回工单, 重开工单, 编辑待处理/退回待提交工单]
+    调度者:
+      id: dispatcher
+      desc: 接住工单并指派处理人
+      actions: [分派处理人, 退回给提交者, 拒绝关闭, 重新分派, 转交他人]
+    完成者:
+      id: resolver
+      desc: 实际处理工单的人
+      actions: [处理完成, 退回调度者, 转交他人]
+
+  role_constraints:
+    - 提交者必须和处理侧不同（同一工单提交者不能是调度者或完成者）
+    - 调度者与完成者可以为同一实际人员，但产品上仍须呈现两个清楚视角
+    - 现实里最少可只有两个人，但产品上仍要呈现三个清楚视角
+
+  # --- 状态流转规则 ---
+  state_transitions:
+    待处理:   [处理中, 已撤回, 已关闭, 退回待提交]
+    处理中:   [已解决, 退回待分派, 退回待提交]
+    已解决:   [已关闭, 退回处理]
+    已关闭:   [待处理]
+    退回待分派: [处理中, 已关闭, 退回待提交]
+    退回待提交: [待处理, 已撤回]
+    退回处理:  [已解决, 退回待分派]
+    已撤回:   []
+
+  # --- 操作约束 ---
+  operation_rules:
+    - 退回操作（→退回待分派/退回待提交/退回处理）必须附带原因
+    - 已解决必须附带处理说明
+    - 拒绝关闭（→已关闭 from 待处理/退回待分派）必须附带原因
+    - 重开工单（已关闭→待处理）必须附带原因
+    - 工单只能在 退回待提交 或 待处理 状态下编辑内容
+    - 分派后状态自动变为处理中
+
+  # --- 字段规则 ---
+  field_rules:
+    type:
+      values: [咨询, 报修, 建议, 投诉]
+      required: true
+    priority:
+      values: [低, 中, 高, 紧急]
+      required: true
+    title:
+      required: true
+      nullable: false
+    description:
+      required: true
+      nullable: false
+
   proposal:
     - Keep proposals concise, focus on WHY not HOW
+
   tasks:
     - Break into chunks of 3-7 tasks per change
+    - Each task must be independently verifiable
+    - Tests must be written before implementation code

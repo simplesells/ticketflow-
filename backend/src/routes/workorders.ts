@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
-import db, { generateCode, rowToWorkOrder, WorkOrderStatus } from '../db/database';
+import { requireRole, AuthRequest } from '../middleware/requireRole';
+import db, { generateCode, rowToWorkOrder, WorkOrderStatus, createNotification } from '../db/database';
+import { findUserByDisplayName } from '../models/user';
 
 // 流转规则: from → 可到达的 to
 const TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
@@ -29,7 +31,7 @@ function isReturn(target: WorkOrderStatus): boolean {
 
 const router = Router();
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/', requireRole(['submitter', 'dispatcher', 'resolver']), (req: Request, res: Response) => {
   const { status, assignee } = req.query;
   let q = 'SELECT * FROM workorders WHERE 1=1';
   const params: any[] = [];
@@ -40,14 +42,14 @@ router.get('/', (req: Request, res: Response) => {
   res.json(rows.map(rowToWorkOrder));
 });
 
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', requireRole(['submitter', 'dispatcher', 'resolver']), (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM workorders WHERE id = ?').get(req.params.id);
   if (!row) { res.status(404).json({ error: '工单不存在' }); return; }
   res.json(rowToWorkOrder(row));
 });
 
-router.post('/', (req: Request, res: Response) => {
-  const { title, description, type, priority, submitter } = req.body;
+router.post('/', requireRole(['submitter']), (req: AuthRequest, res: Response) => {
+  const { title, description, type, priority } = req.body;
   if (!title || !description || !type || !priority) {
     res.status(400).json({ error: '缺少必填字段：title, description, type, priority' });
     return;
@@ -58,15 +60,17 @@ router.post('/', (req: Request, res: Response) => {
   if (!VALID_PRIORITIES.includes(priority)) { res.status(400).json({ error: `无效的优先级: ${priority}` }); return; }
   const now = new Date().toISOString();
   const code = generateCode();
+  const submitter = req.user?.displayName || '匿名';
+  const initialHistory = JSON.stringify([{ status: '待处理', operator: submitter, time: now }]);
   const result = db.prepare(`
     INSERT INTO workorders (code, title, description, type, priority, status, submitter, history, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, '待处理', ?, '[]', ?, ?)
-  `).run(code, title, description, type, priority, submitter || '匿名', now, now);
+    VALUES (?, ?, ?, ?, ?, '待处理', ?, ?, ?, ?)
+  `).run(code, title, description, type, priority, submitter, initialHistory, now, now);
   const row = db.prepare('SELECT * FROM workorders WHERE id = ?').get(result.lastInsertRowid);
   res.status(201).json(rowToWorkOrder(row));
 });
 
-router.patch('/:id/status', (req: Request, res: Response) => {
+router.patch('/:id/status', requireRole(['submitter', 'resolver', 'dispatcher']), (req: AuthRequest, res: Response) => {
   const row = db.prepare('SELECT * FROM workorders WHERE id = ?').get(req.params.id) as any;
   if (!row) { res.status(404).json({ error: '工单不存在' }); return; }
 
@@ -104,7 +108,7 @@ router.patch('/:id/status', (req: Request, res: Response) => {
   }
 
   const w = rowToWorkOrder(row);
-  const historyEntry: any = { status: newStatus, operator: 'system', time: new Date().toISOString() };
+  const historyEntry: any = { status: newStatus, operator: req.user?.displayName || 'system', time: new Date().toISOString() };
   if (returnReason) historyEntry.reason = returnReason;
 
   const newHistory = JSON.stringify([...w.history, historyEntry]);
@@ -114,11 +118,21 @@ router.patch('/:id/status', (req: Request, res: Response) => {
   db.prepare('UPDATE workorders SET status = ?, return_reason = ?, history = ?, updated_at = ? WHERE id = ?')
     .run(newStatus, reasonVal, newHistory, now, req.params.id);
 
+  // 通知相关人员（排除操作者自己）
+  const currentUserId = req.user!.id;
+  const recipients = new Set<number>();
+  const sub = findUserByDisplayName(w.submitter);
+  if (sub && sub.id !== currentUserId) recipients.add(sub.id);
+  const asn = findUserByDisplayName(w.assignee);
+  if (asn && asn.id !== currentUserId) recipients.add(asn.id);
+  const msg = `工单 ${w.code} 状态变更为"${newStatus}"`;
+  recipients.forEach(uid => createNotification({ userId: uid, workorderId: w.id, type: 'status_change', message: msg }));
+
   const updated = db.prepare('SELECT * FROM workorders WHERE id = ?').get(req.params.id) as any;
   res.json(rowToWorkOrder(updated));
 });
 
-router.patch('/:id/edit', (req: Request, res: Response) => {
+router.patch('/:id/edit', requireRole(['submitter']), (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM workorders WHERE id = ?').get(req.params.id) as any;
   if (!row) { res.status(404).json({ error: '工单不存在' }); return; }
   // Only allow editing when in 退回待提交 or 待处理
@@ -135,7 +149,7 @@ router.patch('/:id/edit', (req: Request, res: Response) => {
   res.json(rowToWorkOrder(updated));
 });
 
-router.patch('/:id/assign', (req: Request, res: Response) => {
+router.patch('/:id/assign', requireRole(['dispatcher']), (req: AuthRequest, res: Response) => {
   const row = db.prepare('SELECT * FROM workorders WHERE id = ?').get(req.params.id) as any;
   if (!row) { res.status(404).json({ error: '工单不存在' }); return; }
   const { assignee } = req.body;
@@ -148,18 +162,20 @@ router.patch('/:id/assign', (req: Request, res: Response) => {
   }
 
   const w = rowToWorkOrder(row);
-  // 处理中转交：状态不变只换人
-  const isTransfer = row.status === '处理中';
-  const newStatus: WorkOrderStatus = isTransfer ? '处理中'
-    : '处理中';
+  const newStatus: WorkOrderStatus = '处理中';
 
-  const actionLabel = isTransfer ? `转交: ${row.assignee || '无人'} → ${assignee}` : `指派: ${assignee}`;
-  const historyEntry: any = { status: newStatus, operator: actionLabel, time: new Date().toISOString() };
+  const historyEntry: any = { status: newStatus, operator: req.user?.displayName || 'system', time: new Date().toISOString() };
   const newHistory = JSON.stringify([...w.history, historyEntry]);
   const now = new Date().toISOString();
 
   db.prepare('UPDATE workorders SET assignee = ?, status = ?, history = ?, return_reason = \'\', updated_at = ? WHERE id = ?')
     .run(assignee, newStatus, newHistory, now, req.params.id);
+
+  // 通知被分派者
+  const asnUser = findUserByDisplayName(assignee);
+  if (asnUser) {
+    createNotification({ userId: asnUser.id, workorderId: w.id, type: 'assign', message: `工单 ${w.code} 已分派给你` });
+  }
 
   const updated = db.prepare('SELECT * FROM workorders WHERE id = ?').get(req.params.id) as any;
   res.json(rowToWorkOrder(updated));

@@ -5,7 +5,7 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "tsx watch src/main.ts",
-    "start": "tsx src/main.ts",
+    "start": "node dist/main.js",
     "build": "tsc"
   },
   "dependencies": {
@@ -18,7 +18,9 @@
     "@types/cors": "^2.8.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.7"
   }
 }
